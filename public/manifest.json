@@ -1,0 +1,36 @@
+{
+    "name": "Local AI",
+    "short_name": "LocalAi",
+    "description": "Local AI assistant for PHP backend application development.",
+    "id": "pwa-localia",
+    "start_url": "/?source=pwa",
+    "display": "standalone",
+    "icons": [
+      {
+        "src": "/assets/icons/icon-192.png",
+        "sizes": "192x192",
+        "type": "image/png",
+        "purpose": "any"
+      },
+      {
+        "src": "/assets/icons/icon-512.png",
+        "sizes": "512x512",
+        "type": "image/png",
+        "purpose": "maskable"
+      }
+    ],
+    "screenshots": [
+      {
+        "src": "/assets/splash-screen/onboarding1.png",
+        "sizes": "371x824",
+        "type": "image/png",
+        "form_factor": "narrow"
+      },
+      {
+        "src": "/assets/splash-screen/onboarding2.png",
+        "sizes": "1416x914",
+        "type": "image/png",
+        "form_factor": "wide"
+      }
+    ]
+  }

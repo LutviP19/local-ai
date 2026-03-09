@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LocalAI-Assistant Pro</title>
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/manifest.json">
 
     <script src="./assets/js/htmx.min.js"></script>
     <script defer src="./assets/js/alpine.min.js"></script>
@@ -29,12 +31,136 @@
             isLoading: false, // Proses memuat jawaban
             toast: { show: false, message: '', type: 'success' }, // Toast
             showToTop: false,
-            showTemplates: false,            
+            showTemplates: false,
+            isTyping: false,
+            speechSupported: false,
+            isListening: false,
+            useRecognition: false,
+            recognition: null,
+            silenceTimer: null,
+            silenceDelay: 4500, // 4.5 detik diam = Kirim
+            startTime: null,
+            animationFrame: null,
             init() {
                 // Deteksi scroll layar
                 window.addEventListener('scroll', () => {
                     this.showToTop = window.pageYOffset > 400;
                 });
+
+                // Cek dukungan browser
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    console.log('Browser Anda tidak mendukung Speech Recognition.');
+                    return;
+                }
+                this.recognition = new SpeechRecognition();
+                this.speechSupported = true;
+
+                // 1. Bahasa (Krusial untuk Akurasi)
+                this.recognition.lang = 'id-ID'; // Bahasa Indonesia
+
+                // 2. Continuous (Terus menerus atau sekali jalan)
+                // Jika TRUE: Mic tetap menyala setelah Anda berhenti bicara (bagus untuk dikte panjang).
+                // Jika FALSE: Mic otomatis mati setelah satu kalimat selesai (bagus untuk command/chat).
+                this.recognition.continuous = true;
+
+                // 3. Interim Results (Hasil Sementara)
+                // Jika TRUE: Teks muncul di layar saat Anda sedang bicara (real-time).
+                // Jika FALSE: Teks baru muncul setelah Anda berhenti bicara.
+                // Untuk RAM 3GB, FALSE lebih ringan karena tidak sering merender ulang UI.
+                this.recognition.interimResults = true;
+
+                // 4. Max Alternatives
+                // Menentukan berapa banyak variasi kata yang diberikan jika suara kurang jelas.
+                // this.recognition.maxAlternatives = 1;
+
+                this.recognition.onresult = (event) => {
+                    let transcript = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        transcript += event.results[i][0].transcript;
+                    }
+                    
+                    // Update input
+                    const input = document.getElementById('chat-input');
+                    input.value = transcript;
+                    
+                    // SINKRONISASI: Hanya jalankan/reset timer jika ada teks yang terdeteksi
+                    if(transcript.trim().length > 0) {
+                        this.resetSilenceLogic();
+                    }
+                };
+
+                this.recognition.onerror = (e) => { 
+                    console.error('Mic Error:', e.error);
+                    
+                    if (e.error === 'network') {
+                        alert('Gagal terhubung ke Server Speech. Pastikan Internet stabil dan Google Services aktif di Brave.');
+                        this.speechSupported = false;
+                    }
+                    
+                    // Pastikan UI kembali ke mode standby
+                    this.isListening = false;
+                    cancelAnimationFrame(this.animationFrame);
+                    const progressBar = document.getElementById('silence-progress');
+                    if (progressBar) progressBar.style.width = '0%';
+                };
+
+                this.recognition.onend = () => {
+                    if (this.isListening) this.stopListening(true);
+
+                    const text = document.getElementById('chat-input').value;
+                    this.prompt = text;
+                };
+            },  
+            updateProgressBar() {
+                if (!this.startTime || !this.isListening) return;
+
+                const elapsed = Date.now() - this.startTime;
+                const remaining = Math.max(0, this.silenceDelay - elapsed);
+                const percentage = (remaining / this.silenceDelay) * 100;
+
+                const progressBar = document.getElementById('silence-progress');
+                if (progressBar) progressBar.style.width = percentage + '%';
+
+                if (remaining > 0) {
+                    this.animationFrame = requestAnimationFrame(() => this.updateProgressBar());
+                }
+            },
+            resetSilenceLogic() {
+                // 1. Matikan animasi & timer lama (Hemat CPU)
+                cancelAnimationFrame(this.animationFrame);
+                clearTimeout(this.silenceTimer);
+
+                // 2. Mulai Timer baru
+                this.startTime = Date.now();
+                this.silenceTimer = setTimeout(() => this.stopListening(true), this.silenceDelay);
+
+                // 3. Jalankan animasi bar
+                this.updateProgressBar();
+            },
+            startListening() {
+                // Matikan suara AI (TTS) jika sedang bicara agar tidak terekam mic
+                if (window.speechSynthesis) window.speechSynthesis.cancel();
+                
+                this.isListening = true;
+                this.recognition.start();
+                this.resetSilenceLogic();
+            },
+            stopListening(autoSend = false) {
+                this.isListening = false;
+                this.useRecognition = true;
+                this.recognition.stop();
+                cancelAnimationFrame(this.animationFrame);
+                clearTimeout(this.silenceTimer);
+
+                // Visual Clean-up
+                document.getElementById('silence-progress').style.width = '0%';
+
+                // Kirim otomatis jika dipicu oleh Silence Timer
+                if (autoSend) {
+                    this.useRecognition = true;
+                    setTimeout(() => htmx.trigger('#btn-send', 'click'), 300);
+                }
             },
             renderMarkdown(rawText) {
                 if (!rawText) return '<span class=\'text-slate-500 italic\'>Menunggu input...</span>';
@@ -61,7 +187,7 @@
             setTemplate(type) {
                 const templates = {
                     greeting: 'Halo, apa kabar?',
-                    explain: 'Tolong jelaskan cara kerja query SQL berikut dan beri saran optimasi: \n\n[PASTE QUERY ANDA DISINI]',
+                    generator: 'buatkan modul pesanan',
                     fix: 'Query SQL ini error atau lambat, tolong perbaiki dan jelaskan masalahnya: \n\n[PASTE QUERY ANDA DISINI]',
                     schema: 'Buatkan skema tabel MySQL untuk keperluan [NAMA FITUR] dengan relasi yang tepat.',
 
@@ -90,6 +216,9 @@
                         
                         // Scroll ke posisi kursor agar user tidak bingung jika template panjang
                         ta.setSelectionRange(ta.value.length, ta.value.length);
+
+                        this.isTyping = true;
+                        this.showTemplates = false;
                     }
                 });
             },
@@ -130,28 +259,137 @@
             },
             isSpeaking: false,
             speechInstance: null,
+            currentTimeout: null,
             speak(text) {
+                // UNLOCK AUDIO: Pancing browser agar mengizinkan suara di masa depan
+                // Ini harus dijalankan tepat saat tombol diklik
+                const silentAudio = new Audio();
+                silentAudio.play().catch(() => {});
+
                 // Jika sedang bicara, maka berhenti (Toggle)
                 if (this.isSpeaking) {
-                    window.speechSynthesis.cancel();
-                    this.isSpeaking = false;
-                    return;
+                    //window.speechSynthesis.cancel();
+                    //this.isSpeaking = false;
+                    //return;
+
+                    this.stopSpeak();
                 }
 
                 // Bersihkan teks dari format Markdown (seperti ** dan ```)
-                const cleanText = text.replace(/[*#`]|```[\s\S]*?```/g, '');
-                
+                // const cleanText = text.replace(/[*#`]|```[\s\S]*?```/g, '');
+
+                // 1. Pembersihan Ekstrim: Hapus Markdown dan HANYA sisakan Huruf, Angka, Spasi, Titik, Koma.
+                // Ini menghilangkan penyebab - Invalid punctuation mode
+                const cleanText = text
+                    .replace(/```[\s\S]*?```/g, '') // Hapus blok kode
+                    .replace(/[*#`_~>]/g, '')      // Hapus simbol Markdown
+                    .replace(/[^\w\s.,?!]/gi, '')   // Hapus karakter aneh (emoji, simbol matematika, dll)
+                    .trim();
+
+                if (!cleanText) return;
+
                 this.speechInstance = new SpeechSynthesisUtterance(cleanText);
+
+                // 1. Ambil daftar suara
+                const voices = window.speechSynthesis.getVoices();
+                
+                // 2. Cari suara Indonesia
+                //const idVoice = voices.find(v => v.lang.includes('id') || v.lang.startsWith('id'));
+                const idVoice = voices.find(v => v.lang.includes('id') && v.name.includes('Indonesian+Robosoft6'));
+                
+                // 3. FIX: Hanya set jika idVoice adalah OBJECT dan bukan null/undefined
+                if (idVoice && typeof idVoice === 'object') {
+                    this.speechInstance.voice = idVoice;
+                }
                 
                 // Set Bahasa (id-ID untuk Bahasa Indonesia)
-                this.speechInstance.lang = 'id-ID';
-                this.speechInstance.rate = 1.0; // Kecepatan bicara
+                this.speechInstance.lang = 'id';
+                this.speechInstance.pitch = 0.7; // Kejelasan bicara
+                this.speechInstance.rate = 1 // Kecepatan bicara
 
                 this.speechInstance.onend = () => { this.isSpeaking = false; };
-                this.speechInstance.onerror = () => { this.isSpeaking = false; };
+                //  this.speechInstance.onerror = () => { this.isSpeaking = false; };
+
+                // Fallback jika Browser Snap tetap gagal (Synthesis Failed)
+                this.speechInstance.onerror = (e) => {
+                    console.error('Browser TTS Error:', e.error);
+                    this.isSpeaking = false;
+                    const voices = window.speechSynthesis.getVoices();
+                    if (e.error === 'undefined' || e.error === 'synthesis-failed' || voices.length === 0) {
+                        this.runLocalTtsVoice(cleanText);
+                    }
+                };
 
                 this.isSpeaking = true;
                 window.speechSynthesis.speak(this.speechInstance);
+            },
+            runLocalTtsVoice(text) {
+                // Tetap pecah teks agar speech-dispatcher tidak overload jika teks sangat panjang
+                const chunks = text.match(/.{1, 300}(\s|$|[.!?])/g) || [text];
+                let currentChunk = 0;
+                //console.log(chunks);
+
+                const playNext = async () => {
+                    if (currentChunk >= chunks.length) {
+                        this.isSpeaking = false;
+                        return;
+                    }
+
+                    const chunkText = chunks[currentChunk].trim();
+                    if (!chunkText) {
+                        currentChunk++;
+                        playNext();
+                        return;
+                    }
+
+                    this.isSpeaking = true;
+
+                    try {
+                        // Kirim teks ke PHP backend
+                        await fetch('api.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: 'text=' + encodeURIComponent(chunkText)
+                        });
+
+                        // Karena spd-say berjalan di background sistem, 
+                        // kita beri jeda estimasi waktu bicara sebelum lanjut ke potongan berikutnya
+                        // Estimasi: 1 detik per 15 karakter (sesuaikan dengan kecepatan suara)
+                        const duration = Math.max(2000, chunkText.length * 80); 
+
+                        // Kita simpan ID timernya ke dalam 'this.currentTimeout'
+                        this.currentTimeout = setTimeout(() => {
+                                                    currentChunk++;
+                                                    playNext();
+                                                }, duration);
+
+                    } catch (error) {
+                        console.error('Backend TTS Error:', error);
+                        this.isSpeaking = false;
+                    }
+                };
+
+                playNext();
+            },
+            stopSpeak() {
+                // Matikan suara di level browser (Local & Online)
+                if (window.speechSynthesis.speaking) {
+                    window.speechSynthesis.cancel();
+                } else {
+                    // Hentikan antrean potongan teks jika ada
+                    if (this.currentTimeout) {
+                        clearTimeout(this.currentTimeout);
+                    }
+                        
+                    // Matikan suara di level sistem (Backend PHP)
+                    fetch('api.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'text=' + encodeURIComponent('STOP_COMMAND')
+                    }).catch(e => console.error('Gagal stop backend:', e));
+                }
+                
+                this.isSpeaking = false;
             },
             showToast(msg, type = 'success') {
                 this.toast.show = true;
@@ -210,9 +448,25 @@
                     let m = Math.floor((s % 3600) / 60);
                     return `${h}h ${m}m`;
                 }
+            },
+            get isModeChat() {
+                const model = (this.selectedModel || '').toLowerCase();
+                const isChatModel = model.includes('chat') || model.includes('asisten');
+                return isChatModel;
+            },
+            get displayName() {
+                // Logika formatted selectedModel
+                const nameOnly = (this.selectedModel || '').split(':')[0];
+                const formattedName = nameOnly.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                return 'AI Assistant - ' + formattedName;
             }
          }"
-         x-init="$watch('selectedModel', value => {
+         x-init="
+         window.speechSynthesis.getVoices(); // Pancing pemuatan suara
+         window.speechSynthesis.onvoiceschanged = () => {
+            console.log('Voices loaded:', window.speechSynthesis.getVoices().length);
+         };
+         $watch('selectedModel', value => {
             if (value !== lastModel) {
                 isSwitching = true;
                 lastModel = value;
@@ -220,7 +474,8 @@
                 // Notifikasi hilang otomatis setelah progres selesai atau klik run
                 setTimeout(() => { isSwitching = false }, 8000);
             }
-         })">
+         });
+         ">
 
          <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-10 border-b border-slate-800 pb-6 gap-6">
             <div class="flex flex-col w-full md:w-auto">
@@ -310,15 +565,13 @@
                         </ul>
                         
                         <div class="p-2 bg-slate-900/50 border-t border-slate-700 text-center">
-                            <p class="text-[9px] text-slate-500 uppercase tracking-tighter text-center">Ollama Engine v0.9.x</p>
+                            <p class="text-[9px] text-slate-500 uppercase tracking-tighter text-center">Ollama Engine v0.5.x</p>
                         </div>
                     </div>
                 </div>
 
                 <div x-data="{ loadedModels: [] }" 
-
                      x-init="setInterval(async () => { 
-                                // Jika tidak mengandung 'chat' atau 'asisten', jangan fetch apa-apa
                                 // Filter model tetap di sisi client untuk menghemat traffic
                                 const modelLower = (selectedModel || '').toLowerCase();
                                 const isAssistant = modelLower.includes('chat') || modelLower.includes('asisten');
@@ -359,6 +612,7 @@
                         E
                     </div>
                 </div>
+                
             </div>
         </header>
 
@@ -368,12 +622,12 @@
                 <div class="bg-slate-800 p-4 md:p-6 rounded-none md:rounded-xl border-y md:border border-slate-700 shadow-xl">
                     <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        AI Assistant buat Naoki
+                        <span x-text="displayName"></span>
                     </h2>                    
 
                     <div class="mt-2 mb-2 bg-slate-900/40 border border-slate-700 rounded-xl overflow-hidden" 
                          x-data="{ open: false }"
-                         x-show="selectedModel.toLowerCase().includes('chat') || selectedModel.toLowerCase().includes('asisten')"
+                         x-show="(!result  || result === 'Error: Prompt tidak boleh kosong.') && (selectedModel.toLowerCase().includes('chat') || selectedModel.toLowerCase().includes('asisten'))"
                          x-transition>
                                             
                         <button @click="open = !open" class="w-full flex items-center justify-between p-3 hover:bg-slate-800/50 transition-all">
@@ -387,7 +641,6 @@
                         <div x-show="open" x-cloak class="p-4 border-t border-slate-700 bg-slate-900/20">
 
                             <div class="flex items-center gap-4 bg-slate-900/50 p-2 px-4 rounded-full border border-slate-700/50">
-
                                 <div class="flex gap-1.5">
                                     <div title="Chat Model" 
                                          class="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse flex items-center justify-center text-[9.8px] font-bold text-emerald-950 leading-none">
@@ -450,7 +703,8 @@
                         </div>
                     </div>
 
-                    <div class="mt-2 mb-2 border-t border-slate-800">
+                    <div x-show="!result || result === 'Error: Prompt tidak boleh kosong.'" 
+                        class="mt-2 mb-2 border-t border-slate-800">
                         <button @click="showTemplates = !showTemplates" 
                                 class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-blue-400 transition-colors group">
                             <svg xmlns="http://www.w3.org/2000/svg" 
@@ -469,19 +723,19 @@
                              x-transition:enter-start="opacity-0 transform -translate-y-2"
                              x-transition:enter-end="opacity-100 transform translate-y-0"
                              class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
-                            <button @click="setTemplate('greeting')" 
+                             <button @click="setTemplate('greeting')" 
                                     class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-slate-800/50 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/10 hover:border-blue-500/50 transition-all">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                 </svg>
                                 Greeting
                             </button>
-                            <button @click="setTemplate('explain')" 
-                                    class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-slate-800/50 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/10 hover:border-blue-500/50 transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <button @click="setTemplate('generator')" 
+                                    class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-slate-800/50 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/10 hover:border-blue-500/50 transition-all">                                
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
-                                Explain Query
+                                Generator
                             </button>
 
                             <button @click="setTemplate('fix')" 
@@ -570,15 +824,51 @@
 
                         <div class="relative w-full">
                             <textarea 
+                                id="chat-input" 
                                 x-model="prompt"
-                                @input="$el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'"
+                                @input="isTyping = $el.value.length > 0; $el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'" 
+                                @keydown.enter="setTimeout(() => { isTyping = false }, 100)" 
                                 class="w-full bg-slate-900 border border-slate-700 rounded-lg p-4 pr-10 text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none text-blue-300 transition-all overflow-hidden resize-none"
                                 style="min-height: 3.5rem; height: auto;"
                                 rows="2"
-                                placeholder="Contoh: Apakah komputer quatum itu..."></textarea>
+                                placeholder="Contoh: Jelaskan tentang komputer quatum..."></textarea>
                             
                             <div class="absolute bottom-2 right-3 text-[10px] text-slate-600 font-mono" x-show="prompt.length > 0">
                                 <span x-text="prompt.length"></span> chars
+                            </div>
+                        </div>
+
+                        <div x-show="speechSupported && !isSpeaking && !isLoading && !isSwitching && !isTyping" 
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 transform scale-95"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-end="opacity-0 transform scale-95"
+                             x-cloak
+                             class="w-full mx-auto p-4 mb-4 bg-slate-900/50 rounded-xl border border-slate-800">
+
+                            <div class="w-full h-1.5 bg-slate-800 rounded-full mb-4 overflow-hidden shadow-inner">
+                                <div id="silence-progress" 
+                                    class="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)] transition-all duration-100 ease-linear" 
+                                    style="width: 0%"></div>
+                            </div>
+
+                            <div class="flex items-center justify-center gap-2">
+                                <button @click="isListening ? stopListening() : startListening()"
+                                        :class="isListening ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-blue-500/50'"
+                                        class="flex items-center gap-2 px-5 py-2.5 rounded-full border transition-all duration-300 group">
+                                    
+                                    <div x-show="isListening" class="flex gap-1">
+                                        <span class="w-1 h-3 bg-red-400 animate-bounce"></span>
+                                        <span class="w-1 h-3 bg-red-400 animate-bounce [animation-delay:0.2s]"></span>
+                                    </div>
+                                    
+                                    <svg x-show="!isListening" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                    </svg>
+
+                                    <span class="text-xs font-bold uppercase tracking-wider" 
+                                        x-text="isListening ? 'Mendengarkan...' : 'Mulai Bicara'"></span>
+                                </button>
                             </div>
                         </div>
                         
@@ -586,6 +876,8 @@
                             x-show="prompt.length > 0 && !isLoading && !isSwitching"
                             @click="
                                 prompt = ''; 
+                                result = ''; 
+                                isTyping = false; 
                                 let ta = $el.parentElement.querySelector('textarea');
                                 ta.style.height = 'auto'; // Reset tinggi textarea
                                 ta.focus();
@@ -601,7 +893,8 @@
                         </button>
                     </div>
 
-                    <div class="mb-4" x-data>
+                    <div x-show="!result || result === 'Error: Prompt tidak boleh kosong.'"
+                         class="mb-4" x-data>
                         <label class="text-xs text-slate-500 uppercase font-bold mb-2 block text-slate-400">Pilih Model AI:</label>
                         <select 
                             x-model="selectedModel" 
@@ -636,13 +929,14 @@
                                 </div>
                                 
                                 <p class="mt-2 text-[10px] text-slate-500 italic text-center">
-                                    Mohon tunggu, Sistem sedang mengganti Model AI Anda...
+                                    Mohon tunggu, Sistem sedang mengganti Model Assistant AI Anda...
                                 </p>
                             </div>
                         </template>
                     </div>
 
                     <button 
+                        id="btn-send" 
                         @click="isLoading = true; // Set loading jadi true
                                 isSwitching = false; // Matikan notifikasi switch jika masih ada
                                 progress = 0; // Reset progress
@@ -686,12 +980,17 @@
                                     // Masukkan ke state Alpine.js
                                     thought = extractedThought;
                                     result = cleanResult;
-                                    
+
                                     progress = 100;
                                     playSound(); 
 
                                     stopTimer();
                                     isProcessing = false;
+
+                                    // Auto Read hanya untuk mode Chat
+                                    if(useRecognition && isModeChat) {
+                                        speak(result); 
+                                    }
                                 })
                                 .catch(err => {
                                     result = 'Terjadi kesalahan koneksi...';
@@ -701,7 +1000,7 @@
                                     isProcessing = false;
                                 })
                                 .finally(() => { isLoading = false })"
-                        :disabled="isProcessing || isLoading || isSwitching || !prompt" 
+                        :disabled="isSpeaking || isListening || isProcessing || isLoading || isSwitching || !prompt" 
                         :class="(isLoading || isSwitching) ? 'opacity-50 cursor-not-allowed bg-slate-600' : 'bg-blue-600 hover:bg-blue-500'"
                         class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition flex items-center gap-2 shadow-lg shadow-blue-900/20 w-full justify-center">
 
@@ -765,12 +1064,12 @@
                      x-transition>
                     
                     <div class="flex justify-between items-center mb-2">
-                        <!-- <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Analysis Result:</h3> -->
                         <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Analysis Result: 
+                            <span class="sm:hidden">Result: </span>
+                            <span class="hidden sm:inline">Analysis Result: </span>
                             <span x-show="timer > 0 || isProcessing" 
                                   x-text="formattedTime" 
-                                  :class="isProcessing ? 'text-blue-500 animate-pulse' : 'text-green-500'"
+                                  :class="isProcessing ? 'text-blue-500' : 'text-green-500'"
                                   class="ml-2 font-mono normal-case">
                             </span>
                         </h3>
@@ -783,7 +1082,8 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                                 </svg>
-                                Save Log
+                                <span class="sm:hidden">Save</span>
+                                <span class="hidden sm:inline">Save Log</span>
                             </button>
 
                             <button x-show="result.length > 0 && result !== 'Sedang menganalisa...'" 
@@ -793,7 +1093,7 @@
                             </button>
 
                             <button x-show="result.length > 0 && result !== 'Sedang menganalisa...'" 
-                                    @click="speak(result)" 
+                                    @click="isSpeaking ? stopSpeak() : speak(result)" 
                                     :title="isSpeaking ? 'Stop Reading' : 'Read Aloud'"
                                     class="flex items-center justify-center p-2 rounded-lg border transition-all duration-300 relative group"
                                     :class="isSpeaking ? 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:border-emerald-500/50 hover:text-emerald-400'">
@@ -968,5 +1268,42 @@
         </button>
     </div>
 
+    <script>
+        // serviceWorker -Cache assets
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./backend-php-sw.js')
+                    .then(reg => console.log('SW Registered!', reg))
+                    .catch(err => console.log('SW Failed!', err));
+            });
+        }
+    
+        // Testing SpeechSynthesisUtterance API
+        const cText = "Halo, Asisten AI Anda sudah siap digunakan.";
+        const utterance = new SpeechSynthesisUtterance(cText);
+
+        utterance.localService = true;
+        // 1. Retrieve a list of votes
+        const voices = window.speechSynthesis.getVoices();
+        // 2. Search for Indonesian voices
+        const idVoice = voices.find(v => v.lang.includes('id') && v.name.includes('Indonesian+Robosoft6'));
+        
+        // 3. FIX: Only set if idVoice is an OBJECT and not null/undefined
+        if (idVoice && typeof idVoice === 'object') {
+            // console.log(idVoice);
+            utterance.voice = idVoice;
+        }
+
+        // Language Set (id-ID for Indonesian)
+        utterance.lang = 'id';
+        // utterance.voice = 'Indonesian+Robosoft6';
+        // utterance.volume = 0.3; // Sound volume
+        utterance.pitch = 1.3; // Clarity of speech
+        utterance.rate = 1; // Speed ​​of speech
+        utterance.onerror = (event) => {
+            console.error("Speech synthesis failed:", event.error);
+        };
+        speechSynthesis.speak(utterance);
+    </script>
 </body>
 </html>

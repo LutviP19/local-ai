@@ -149,7 +149,7 @@ Version 2 :
 
 
 ##############################################################################
-Step 4
+Step 4 (DONE)
 Real Test collaborate with LocalAI
 ===================
 Version 3 :
@@ -215,4 +215,60 @@ Version 3 :
     📍 Lokasi: ./App/Models/PesananModel.php
     🎨 Sukses: View 'pesanan' berhasil dibuat.
     📍 Lokasi: ./views/pesanan.php
+
+
+##############################################################################
+Step 5
+Build installed version with PWA
+====================
+Build as PWA Version :
+    - HTMX Index Final
+    - Build PWA installer
+    - Validate installer
+    - Add interactive some features to index (Server Status, Speak to Text, AutoPlay Response, etc)
+    - Build PWA assets: manifest.json & backend-php-sw.js 
+====================
+
+    Build Assets Directory Structure:
+    ---------------------------------
+    mkdir -p public/assets/{icons,splash-screen}
+    create icon & screenshoot
+
+    create installer files
+    ----------------------
+    touch public/manifest.json public/backend-php-sw.js
+
+
+    Add some features to index 
+    --------------------------
+    HTMX Index Final
+
+
+    manifest.json       # App configuration (name, icons, display)
+    backend-php-sw.js   # Service Worker for caching & offline support
+
+
+##############################################################################
+Step 6 (Optional - Final)
+Integating with local system and network
+====================
+Extra 
+Install PWA to StartUp Application :
+    - Enhance Index more clean, stable and interactive : Index V3 (Final)
+    - Setting up local network to allow access LocalAI
+    - Install Application to system / mobile phone
+    - Add command and installed PWA at StartUp
+====================
+
+    Command to Find bin path of PHP (Mac / Linux):
+    -: which php
+
+    1. Add run custom command at StartUp:
+        <php bin path> -S localhost:8000 <full_path_to_project>
+        eg:
+        /usr/bin/php -S 0.0.0.0:8000 /home/my/project_path/public
+
+    2. Add Installed PWA at StartUp Application.
+
+    3. Restart OS. 
 
