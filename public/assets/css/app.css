@@ -1,0 +1,59 @@
+[x-cloak] { 
+    display: none !important; 
+}
+.fade-out {
+    transition: opacity 1s ease-out;
+}
+.htmx-swapping {
+    opacity: 0;
+}
+
+/* Sembunyikan spinner secara default */
+.htmx-indicator {
+    display: none;
+}
+
+/* Tampilkan spinner saat request aktif */
+.htmx-request .htmx-indicator {
+    display: inline-block;
+}
+
+/* Sembunyikan ikon statis saat request aktif */
+.htmx-request .htmx-indicator-hide {
+    display: none;
+}
+
+/* Efek visual disabled saat loading */
+.htmx-request {
+    pointer-events: none; /* Mencegah klik ganda */
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Memastikan list Markdown muncul dengan rapi */
+.prose ul {
+    list-style-type: disc !important;
+    padding-left: 1.5rem !important;
+    margin-top: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+}
+.prose li {
+    margin-top: 0.25rem !important;
+    margin-bottom: 0.25rem !important;
+    color: #94a3b8; /* text-slate-400 */
+}
+.prose strong {
+    color: #34d399 !important; /* text-emerald-400 untuk teks tebal */
+    font-weight: 700;
+}
+/* Menghilangkan backtick otomatis yang ditambahkan Tailwind prose pada tag code inline */
+.prose code::before, .prose code::after {
+    content: '' !important;
+}
+.prose code {
+    background-color: rgba(51, 65, 85, 0.5); /* bg-slate-700/50 */
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.875em;
+    color: #60a5fa !important; /* text-blue-400 */
+}

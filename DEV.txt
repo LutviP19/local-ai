@@ -12,7 +12,7 @@ Dev System:
 
 
 ##############################################################################
-Step 1
+Step 1 (DONE)
 ====================
 Basic :
     - Build custom Model
@@ -50,3 +50,50 @@ Basic :
     ---------
     php test.php
 
+
+##############################################################################
+Step 2
+Basic view with HTMX
+====================
+Version 1 :
+    - Build Basic Frontend HTMX Index V1
+    - Build backend to handle AJAX
+====================
+
+    New Variation Model File:
+    -------------------------
+    mkdir agen-koding && 
+    touch asisten-chat/Modelfile-Riset && 
+    touch agen-koding/Modelfile-Coder
+
+
+    Create Another Custom Models:
+    https://docs.ollama.com/modelfile
+    -----------------------------
+    ollama create asisten-riset -f ./asisten-chat/Modelfile-Riset
+    ollama create agen-koding -f ./agen-koding/Modelfile-Coder
+
+
+    Build Assets Directory Structure:
+    ---------------------------------
+    mkdir -p public/assets/{js,css}
+
+
+    Index & assets files:
+    ---------------------
+    touch public/index.php public/api.php src/helpers.php public/bootstrap.php
+    download assets from CDN
+
+    Run PHP Built-in web server
+    ---------------------------
+    
+    php -S localhost:8000 -t public
+    or (Publish to Local Network)
+    php -S 0.0.0.0:8000 -t public
+
+    Prompt :
+    --------
+    Chat :
+    tulis Halo
+    Kode:
+    tulis Halo dengan program PHP

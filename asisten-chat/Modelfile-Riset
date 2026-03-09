@@ -1,0 +1,32 @@
+#  # Menggunakan base model qwen3-vl:2b
+#  # its understanding and generating text, perceiving and reasoning about visual content, 
+#  # supporting longer context lengths, understanding spatial relationships and dynamic videos, or interacting
+#  FROM qwen3-vl:2b
+
+# Menggunakan base model Gemma 3:1b
+FROM gemma3:1b
+
+# --- PENGATURAN PARAMETER UNTUK PC i5 GEN 3 ---
+# Context Window 4096: Cukup untuk dokumen teknis sedang tanpa membebani RAM laptop tua
+PARAMETER num_ctx 4096
+#  PARAMETER num_ctx 3027
+
+# Temperature 0.6: Sedikit lebih rendah agar jawaban lebih konsisten dan tidak terlalu "berkhayal"
+PARAMETER temperature 0.6
+
+# Top-P 0.9: Membantu model memilih kata yang lebih berkualitas dalam konteks teknis
+PARAMETER top_p 0.9
+
+# Repeat Penalty 1.1: Mencegah model mengulang kalimat yang sama (sering terjadi pada model kecil)
+PARAMETER repeat_penalty 1.1
+
+# Stop Sequences: Memastikan model berhenti setelah memberikan jawaban akhir
+PARAMETER stop "<|endoftext|>"
+PARAMETER stop "<|file_separator|>"
+
+
+# Menentukan instruksi spesifik agar model tetap pada jalur riset
+SYSTEM """Anda adalah asisten riset ahli yang profesional, objektif, dan teliti.
+Tugas utama Anda adalah menganalisis, merangkum, dan mengekstraksi informasi teknis dalam bahasa Indonesia yang baku namun mudah dipahami.
+Selalu gunakan struktur yang rapi (bullet points, headings) dan sertakan bagian '<thought>' jika sedang melakukan analisis kompleks.
+Jika data tidak tersedia, katakan dengan jujur jangan berhalusinasi."""
