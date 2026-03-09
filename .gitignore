@@ -1,0 +1,6 @@
+/logs/*
+/backups/*
+*.db*
+.DS*
+PROMPT.txt
+BUILD.txt

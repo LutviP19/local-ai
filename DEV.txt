@@ -1,0 +1,52 @@
+Build Local AI Assistant with PHP-8 & Ollama
+--------------------------------------------
+Stacks:
+- PHP-8.x & SQLite
+- Ollama
+- AI Models (gemma3:1b, qwen2.5:0.5b, embeddinggemma);
+- HTMX, AlpineJS, Tailwind-CSS
+- PWA Installer
+Dev System: 
+- OS: Mac / Linux
+- Browser : Google Chrome
+
+
+##############################################################################
+Step 1
+====================
+Basic :
+    - Build custom Model
+====================
+
+    Install Ollama :
+    ----------------
+    https://ollama.com/
+
+
+    Add Main Model:
+    --------------
+    ollama pull gemma3:1b
+
+
+    Build Directory Structure:
+    --------------------------
+    mkdir asisten-chat src
+
+
+    Basic Model Files:
+    ------------------
+    touch asisten-chat/Modelfile-Default
+
+
+    Create Custom Model:
+    ---------------------
+    ollama create default-chat -f ./asisten-chat/Modelfile-Default
+
+    Basic Testing :
+    ---------------
+    touch src/OllamaExec.php test.php
+
+    Run Test:
+    ---------
+    php test.php
+
