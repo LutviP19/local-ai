@@ -1,6 +1,6 @@
 # local-ai
 
-![Screenshot of app](public/assets/splash-screen/onboarding2.png)
+![Screenshot of app](public/assets/splash-screen/Local-AI_screenshot.png)
 
 # Build with PHP-8 & Ollama
 
