@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LocalAI-Assistant Pro</title>
+
     <script src="./assets/js/htmx.min.js"></script>
     <script defer src="./assets/js/alpine.min.js"></script>
     <script src="./assets/js/tailwindcss.js"></script>
@@ -258,7 +259,7 @@
                             
                             // 2. BERSIHKAN KONTEN sebelum fetch dimulai
                             if(isLoading) {
-                                $el.innerHTML = '<div class=\'text-slate-600 text-xs animate-pulse\'>Thinking...</div>';
+                                $el.innerHTML = '<div class=\'text-blue-400 text-xs animate-pulse font-medium\' style=\'text-shadow: 0 0 4px rgba(96, 165, 250, 0.8), 0 0 10px rgba(96, 165, 250, 0.4);\'>Thinking...</div>';
                             } else {
                                 $el.innerHTML = '<div class=\'text-slate-600 text-xs animate-pulse\'>Reconnecting...</div>';
                             }
@@ -309,7 +310,7 @@
                         </ul>
                         
                         <div class="p-2 bg-slate-900/50 border-t border-slate-700 text-center">
-                            <p class="text-[9px] text-slate-500 uppercase tracking-tighter text-center">Ollama Engine v0.5.x</p>
+                            <p class="text-[9px] text-slate-500 uppercase tracking-tighter text-center">Ollama Engine v0.9.x</p>
                         </div>
                     </div>
                 </div>
@@ -317,24 +318,33 @@
                 <div x-data="{ loadedModels: [] }" 
 
                      x-init="setInterval(async () => { 
-                        // Jika tidak mengandung 'chat' atau 'asisten', jangan fetch apa-apa
-                        if (isOffline || !(selectedModel?.toLowerCase().includes('chat') || selectedModel?.toLowerCase().includes('asisten'))) {
-                            return;
-                        }
+                                // Jika tidak mengandung 'chat' atau 'asisten', jangan fetch apa-apa
+                                // Filter model tetap di sisi client untuk menghemat traffic
+                                const modelLower = (selectedModel || '').toLowerCase();
+                                const isAssistant = modelLower.includes('chat') || modelLower.includes('asisten');
 
-                        try {
-                            const res = await fetch('http://localhost:11434/api/tags');
-                            const ps = await fetch('http://localhost:11434/api/ps');
-                            const data = await ps.json();
-                            loadedModels = data.models || [];
-                        } catch (e) {
-                            console.error('Ollama offline');
-                        }
-                    }, 5000)"
+                                if (isOffline || isProcessing || !isAssistant) {
+                                    return;
+                                }
+
+                                try {
+                                    // Panggil backend PHP Anda sendiri, bukan langsung ke port 11434
+                                    const response = await fetch('api.php?action=get_ollama_status');
+                                    
+                                    if (!response.ok) throw new Error('Backend Error');
+                                    
+                                    const data = await response.json();
+                                    
+                                    // Data models diambil dari hasil olahan PHP
+                                    loadedModels = data.models || [];
+                                } catch (e) {
+                                    console.error('Gagal mengambil status Ollama via PHP');
+                                }
+                            }, 5000)"
                      class="flex gap-1.5 p-2 ms-2 bg-slate-900/80 rounded-full border border-slate-700 shadow-lg">
                     
                     <div :title="'Chat Model: ' + (loadedModels.some(m => m.name.includes('chat')) ? 'Active' : 'Standby')"
-                         class="w-3.5 h-3.5 rounded-full transition-all duration-500 text-[7px] font-bold text-center flex items-center justify-center"
+                         class="w-3.5 h-3.5 rounded-full transition-all duration-500 text-[9.8px] font-bold text-center flex items-center justify-center"
                          :class="loadedModels.some(m => m.name.includes('chat')) 
                                  ? 'bg-emerald-500 text-emerald-950 shadow-[0_0_8px_#10b981] animate-pulse' 
                                  : 'bg-slate-600 text-slate-300'">
@@ -342,15 +352,13 @@
                     </div>
 
                     <div :title="'Embedding Model: ' + (loadedModels.some(m => m.name.includes('nomic')) ? 'Active' : 'Standby')"
-                         class="w-3.5 h-3.5 rounded-full transition-all duration-500 text-[7px] font-bold text-center flex items-center justify-center"
+                         class="w-3.5 h-3.5 rounded-full transition-all duration-500 text-[9.8px] font-bold text-center flex items-center justify-center"
                          :class="loadedModels.some(m => m.name.includes('nomic')) 
                                 ? 'bg-blue-500 text-blue-950 shadow-[0_0_8px_#3b82f6] animate-pulse' 
                                 : 'bg-slate-600 text-slate-300'">
                         E
                     </div>
                 </div>
-
-                
             </div>
         </header>
 
@@ -382,20 +390,20 @@
 
                                 <div class="flex gap-1.5">
                                     <div title="Chat Model" 
-                                         class="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse flex items-center justify-center text-[7px] font-bold text-emerald-950 leading-none">
+                                         class="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse flex items-center justify-center text-[9.8px] font-bold text-emerald-950 leading-none">
                                          M
                                     </div>
                                     
                                     <div title="Embedding Model" 
-                                         class="w-3.5 h-3.5 rounded-full bg-blue-500 animate-pulse flex items-center justify-center text-[7px] font-bold text-blue-950 leading-none">
+                                         class="w-3.5 h-3.5 rounded-full bg-blue-500 animate-pulse flex items-center justify-center text-[9.8px] font-bold text-blue-950 leading-none">
                                          E
                                     </div>
                                 </div>
                                 
                                 <div hx-get="api.php?action=get_memory_stats" 
                                      hx-trigger="load, 
-                                             every 15s[(selectedModel || '').includes('chat') || (selectedModel || '').includes('asisten')], 
-                                             click from:#inject-btn" 
+                                             every 15s[(selectedModel?.toLowerCase().includes('chat') || selectedModel?.toLowerCase().includes('asisten')) && !isSpeaking && !isLoading], 
+                                             click from:#inject-btn, click from:#hidden-reindex-btn" 
                                      class="border-l border-slate-700 pl-4">
                                     <div class="animate-pulse bg-slate-700 h-3 w-20 rounded"></div>
                                 </div>
@@ -418,6 +426,7 @@
 
                             <form hx-post="api.php?action=inject_text" hx-target="#inject-status" @htmx:after-request="document.getElementById('raw_text').value = ''">
                                 <textarea id="raw_text" name="content" rows="4" 
+                                          style="min-height: 3.5rem; height: auto;" 
                                           class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-xs text-slate-300 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all"
                                           placeholder="Paste teks dari PDF atau dokumen Anda di sini..."></textarea>
 
@@ -627,7 +636,7 @@
                                 </div>
                                 
                                 <p class="mt-2 text-[10px] text-slate-500 italic text-center">
-                                    Mohon tunggu, Sistem sedang mengganti Agen AI Anda...
+                                    Mohon tunggu, Sistem sedang mengganti Model AI Anda...
                                 </p>
                             </div>
                         </template>
@@ -723,6 +732,31 @@
                         </svg>
                         <span x-text="isSwitching ? 'Menyiapkan Agen AI...' : (isLoading ? 'Sedang Menganalisa...' : 'Tanya AI')"></span>
                     </button>
+
+                    <!-- Test Think Flow AI -->
+                    <!-- <button 
+                        @click="
+                            let fakeData = '<think>\n1. Menganalisis permintaan koding dari user.\n2. Merancang solusi menggunakan PHP Native.\n</think>\nIni adalah jawaban simulasi! Pemisahan teks berhasil.';
+                            
+                            // Perbaikan Regex agar tidak error SyntaxError
+                            let match = fakeData.match(/<think>([\s\S]*?)<\/think>/);
+                            
+                            if (match) {
+                                thought = match[1].trim();
+                                result = fakeData.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+                            }
+                            
+                            isExpanded = true;
+                            showToast('Simulasi Berhasil!');
+                            playSound();
+                        "
+                        class="mt-2 text-[10px] text-slate-500 hover:text-blue-400 underline decoration-dotted uppercase tracking-widest transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                        </svg>
+                        Test UI Response
+                    </button> -->
+                    <!-- END Test Think Flow AI -->
                 </div>
 
                 <div class="bg-black/40 rounded-xl p-6 border border-slate-800 min-h-[100px] relative" 
@@ -731,6 +765,7 @@
                      x-transition>
                     
                     <div class="flex justify-between items-center mb-2">
+                        <!-- <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Analysis Result:</h3> -->
                         <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">
                             Analysis Result: 
                             <span x-show="timer > 0 || isProcessing" 
@@ -933,14 +968,5 @@
         </button>
     </div>
 
-    <script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./backend-php-sw.js')
-                .then(reg => console.log('SW Registered!', reg))
-                .catch(err => console.log('SW Failed!', err));
-        });
-    }
-    </script>
 </body>
 </html>

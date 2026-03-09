@@ -1,0 +1,89 @@
+#!/usr/bin/env php
+
+<?php 
+/**
+ * @author LutviP19 <lutvip19@gmail.com>
+ * generator
+ * Script Generator Model Pro
+ * Penggunaan: ./generator [NamaModel] [FolderTujuan]
+ * Contoh: ./generator DashboardModel App/Models
+ */
+
+include_once './stubs/Stubs.php';
+
+
+// 1. Tangkap Input
+$inputName = $argv[1] ?? null;
+$folderInput = $argv[2] ?? null; // Default folder jika tidak diisi
+
+// Jika tidak ada nama, masuk ke Interactive Mode
+if (!$inputName) {
+    echo "\033[0;33m❓ Nama file tidak ditentukan. Masukkan nama: \033[0m";
+    $handle = fopen("php://stdin", "r");
+    $name = trim(fgets($handle));
+    if (empty($name)) die("❌ Proses dibatalkan.\n");
+}
+
+// 2. Format Nama Class dan Folder
+$targetDir = rtrim(trim($folderInput), '/');
+$newClassName = ucfirst(trim($inputName));
+
+
+// --- GENERATE STUBS --- 
+// Normalisasi untuk pengecekan tipe
+$lowerInput = strtolower($inputName);
+
+if (str_contains($lowerInput, 'model')) {
+    // ./generator DashboardModel
+    // ./generator ProductModel
+    // ./generator AdminSettingsModel App/Models/Admin
+
+    $stubPath  = './stubs/Models/sample.php';
+    // Fallback ke Default targetDir
+    $targetDir = $targetDir ?: './App/Models';
+    // die(var_dump($targetDir));
+
+    // formatClassName
+    $newClassName = Stubs::formatClassName($inputName, "Model");
+    
+    // echo Stubs::generateModelFromStub($newClassName, $stubPath, $targetDir);
+    echo Stubs::generate($newClassName, $stubPath, $targetDir);
+}
+elseif (str_contains($lowerInput, 'controller')) {
+    // ./generator DashboardController
+    // ./generator ProductController
+    // ./generator AdminSettingsController App/Controllers/Admin
+
+    
+    
+    // Jika Api Controller './App/Controllers/Api'
+    // if(str_contains(strtolower($targetDir), 'api')) {
+    if (str_contains($lowerInput, 'api')) {
+        // formatClassName
+        $newClassName = Stubs::formatClassName($inputName, "ApiController");
+        $targetDir = $targetDir ?: './App/Controllers/Api';
+        $stubPath  = './stubs/Controllers/sample-api.php';
+    } else {
+
+        $stubPath  = './stubs/Controllers/sample.php';
+        // Fallback ke Default targetDir
+        $targetDir = $targetDir ?: './App/Controllers';
+
+        // formatClassName
+        $newClassName = Stubs::formatClassName($inputName, "Controller");
+    }
+    // var_dump($targetDir); die();
+
+    echo Stubs::generate($newClassName, $stubPath, $targetDir);
+}
+else {
+    //./generator detail_pesanan views/order
+
+    // Asumsikan ini adalah View jika tidak ada suffix khusus
+    $stubPath = './stubs/Views/sample.php';
+    $targetDir = $targetDir ?: './views';
+
+    $viewName = Stubs::formatViewName($inputName);
+    echo Stubs::generateView($viewName, $stubPath, $targetDir);
+}
+exit;

@@ -7,8 +7,7 @@ $defaultModel = 'default-chat'; // default-chat
 $db_file = BASEPATH . '/src/vector_store.db'; // Nama database
 
 // List of custom models allowed to appear in the dropdown
-$allowedModels = ['default-chat', 'asisten-riset', 'agen-koding'];
-
+$allowedModels = ['default-chat', 'asisten-riset', 'agen-koding', 'generator-koding'];
 
 if ($action === 'status') {
     $ollama = new OllamaExec();
@@ -167,13 +166,14 @@ if ($action === 'save_log') {
     $modelName = explode(':', $model)[0];
 
     // Create a 'logs' folder if it doesn't exist yet.
-    if (!file_exists('logs')) {
-        mkdir('logs', 0755, true);
+    $path = BASEPATH . '/logs';
+    if (!file_exists($path)) {
+        mkdir($path, 0755, true);
     }
-    if (!file_exists('logs/'.str_replace(" ", "_", $modelName))) {
-        mkdir('logs/'.$modelName, 0755, true);
+    if (!file_exists($path . '/'.str_replace(" ", "_", $modelName))) {
+        mkdir($path . '/'.$modelName, 0755, true);
     }
-    $logPath = 'logs/'.$modelName;
+    $logPath = $path . '/'.$modelName;
 
     $timestamp = date('Y-m-d H:i:s');
     $fileName  = $logPath.'/chat-history-' . date('Y-m-d') . '.log';
@@ -189,7 +189,8 @@ if ($action === 'save_log') {
 
     // Save with APPEND mode (appends to bottom row, does not overwrite)
     if (file_put_contents($fileName, $content, FILE_APPEND)) {
-        echo json_encode(['status' => 'success', 'file' => $fileName]);
+        $formatPath = 'logs/'.$modelName. '/'.basename($fileName);
+        echo json_encode(['status' => 'success', 'file' => $formatPath]);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Gagal menulis file']);
     }
@@ -214,8 +215,27 @@ if ($action === 'inject_text') {
     // Setup FTS
     createFtsDb($db_file);
     $db = new PDO('sqlite:'.$db_file);
+    
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $db->exec("PRAGMA journal_mode = WAL;");
+
+    // 1. Master Table (Main Data)
+    $db->exec("CREATE TABLE IF NOT EXISTS kearifan_lokal (
+        id INTEGER PRIMARY KEY, 
+        content TEXT, 
+        tags TEXT,
+        vector BLOB,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    // 2. FTS5 Virtual Table (For Quick Search)
+    // We've included 'tags' so it can also be searched via FTS
+    $db->exec("CREATE VIRTUAL TABLE IF NOT EXISTS kearifan_lokal_fts USING fts5(
+        content, 
+        tags, 
+        content='kearifan_lokal', 
+        content_rowid='id'
+    )");
 
     $chunks = preg_split('/\n\s*\n/', $content);
     $count = 0;
@@ -254,6 +274,7 @@ if ($action === 'inject_text') {
 
 if ($action === 'reindex_memory') {
     try {
+        createFtsDb($db_file);
         $db = new PDO('sqlite:'.$db_file);
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -292,7 +313,6 @@ if ($action === 'get_memory_stats') {
     createFtsDb($db_file);
     $db = new PDO('sqlite:'.$db_file);
     
-    
     // Count total chunks
     $count = $db->query("SELECT COUNT(*) FROM kearifan_lokal")->fetchColumn();
     
@@ -308,3 +328,29 @@ if ($action === 'get_memory_stats') {
           </div>";
     exit;
 }
+
+// 
+if (isset($_GET['action']) && $_GET['action'] === 'get_ollama_status') {
+    header('Content-Type: application/json');
+
+    // Mengambil data dari Ollama API (localhost port 11434)
+    // Menggunakan timeout 2 detik agar PHP tidak menunggu terlalu lama jika Ollama mati
+    $ctx = stream_context_create(['http' => ['timeout' => 2]]);
+
+    try {
+        $psData = @file_get_contents('http://localhost:11434/api/ps', false, $ctx);
+        
+        if ($psData === false) {
+            throw new Exception("Ollama Offline");
+        }
+
+        // Teruskan data ke AlpineJS
+        echo $psData;
+
+    } catch (Exception $e) {
+        // Kirim array kosong jika offline agar JS tidak error
+        echo json_encode(['models' => []]);
+    }
+    exit;
+}
+

@@ -100,7 +100,7 @@ Version 1 :
 
 
 ##############################################################################
-Step 3
+Step 3 (DONE)
 Embed output with local dataset
 ====================
 Version 2 :
@@ -135,6 +135,10 @@ Version 2 :
     --------------------------
     HTMX Index Version 2
 
+    Test CREATE DB:
+    ---------------
+    php test.php
+
     Add Index:
     ----------
     Saturnus adalah planet ke-7 dari tata surya kita, dan terkenal karena cincinnya yang spektakuler. Saturnus adalah planet yang sangat menarik dan unik karena cincinnya yang menakjubkan.
@@ -142,4 +146,73 @@ Version 2 :
     Prompt:
     -------
     saturnus
+
+
+##############################################################################
+Step 4
+Real Test collaborate with LocalAI
+===================
+Version 3 :
+    - HTMX Index Version 3
+    - Enhance Debug Dashboard V2 - CRUD ability
+    - Refine datasets before stored
+    - Build command generator using PHP
+    - Build module generator for Real case testing
+    - Testing AI to perform specific tasks with generator
+====================
+
+    Dashboard Debug V2 :
+    Refine datasets
+    Full HTMX (CRUD)
+    ---------------
+    touch public/api-debug.php
+
+    Create Assistant Model:
+    -----------------------
+    touch agen-koding/Modelfile-generator
+    ollama create generator-koding -f ./agen-koding/Modelfile-generator
+
+    Build real App Stubs generator  :
+    ---------------------------------
+    mkdir -p stubs/{Controllers,Models,Views}
+    touch generator Stubs.php
+
+    Add some features to index 
+    --------------------------
+    HTMX Index Version 3
+
+    Test generator:
+    ---------------
+    chmod +x generator
+    ./generator DashboardModel && 
+    ./generator DashboardController && 
+    ./generator ProductApiController App/Controllers/Api/v1 && 
+    ./generator dashboard /views/index
+
+
+    Check Modelfile:
+    ----------------
+    Jelaskan aturan command generator
+    Output: Rules of generator
+
+
+    Test Prompt:
+    ------------
+     buat modul pesanan
+
+
+    Test AI response to terminal :
+    ------------------------------
+    ./generator PesananController && ./generator PesananModel && ./generator pesanan
+
+    ./generator Output:
+    -------------------
+    ✅ Sukses: 'PesananController' berhasil dibuat.
+    📌 Namespace: App\Controllers
+    📍 Lokasi: ./App/Controllers/PesananController.php
+    ✅ Sukses: 'PesananModel' berhasil dibuat.
+    📌 Namespace: App\Models
+    📍 Lokasi: ./App/Models/PesananModel.php
+    🎨 Sukses: View 'pesanan' berhasil dibuat.
+    📍 Lokasi: ./views/pesanan.php
 

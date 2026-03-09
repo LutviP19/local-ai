@@ -1,20 +1,14 @@
 <?php
 
-if (!defined('BASEPATH')) {
-    define('BASEPATH', __DIR__ . '/..');
-}
-
 class OllamaExec {
     private $model;
     private $ollamaPath;
-    private $dbFile;
 
-    public function __construct($model = 'gemma3:1b ') {
+    public function __construct($model = 'gemma3') {
         $this->model = $model;
         // Use absolute path if 'ollama' is not in the web user's PATH
         // Example: '/usr/local/bin/ollama' or simply 'ollama'
         $this->ollamaPath = 'ollama'; 
-        $this->dbFile = BASEPATH . '/src/vector_store.db'; //Nama database
     }
 
     /**
@@ -87,7 +81,7 @@ class OllamaExec {
 
         // Only use FTS5 feature for AI Chat Agent || Assistant
         if (str_contains($this->model, 'chat') || str_contains($this->model, 'asisten')) {
-            $db = new PDO('sqlite:'.$this->dbFile);
+            $db = new PDO('sqlite:vector_store.db');
 
             // --- STEP 1: Full-Text Search (Enhanced) ---
             $cleanQuery = preg_replace('/[^A-Za-z0-9 ]/', '', $prompt);

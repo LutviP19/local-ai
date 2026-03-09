@@ -1,6 +1,6 @@
 <?php 
 
-//=================== End Api
+//=================== Api
 // Function to check what model is currently active in RAM
 function getActiveModel($host) {
     $res = @file_get_contents("http://$host:11434/api/ps");
@@ -46,7 +46,7 @@ function unloadModel($host, $modelName) {
 
 // automatic sentence correction before entering FTS Index
 function refineContent($text) {
-    $jsonFile = BASEPATH . '/src/dictionary.json';
+    $jsonFile = 'dictionary.json';
     $dictionary = [];
 
     // Check if the file exists, if it does load its contents
@@ -90,7 +90,7 @@ function createFtsDb($db_file) {
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $db->exec("PRAGMA journal_mode = WAL;");
 
-        // 1. Master Table (Main Data)
+        // 1. Tabel Master (Data Utama)
         $db->exec("CREATE TABLE IF NOT EXISTS kearifan_lokal (
             id INTEGER PRIMARY KEY, 
             content TEXT, 
@@ -99,8 +99,8 @@ function createFtsDb($db_file) {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
-        // 2. FTS5 Virtual Table (For Quick Search)
-        // We include 'tags' so they can also be searched via FTS
+        // 2. Tabel Virtual FTS5 (Untuk Pencarian Cepat)
+        // Kita sertakan 'tags' agar bisa dicari juga via FTS
         $db->exec("CREATE VIRTUAL TABLE IF NOT EXISTS kearifan_lokal_fts USING fts5(
             content, 
             tags, 
@@ -110,7 +110,7 @@ function createFtsDb($db_file) {
     } catch (Exception $e) {
         $error = $e->getMessage();
 
-        // Create a 'logs' folder if it doesn't already exist
+        // Buat folder 'logs' jika belum ada
         if (!file_exists('logs')) {
             mkdir('logs', 0755, true);
         }
@@ -128,7 +128,7 @@ function createFtsDb($db_file) {
         $content .= "ERROR  :\n$error\n";
         $content .= "==========================================END\n\n";
 
-        // Save with APPEND mode (appends to the bottom row, does not overwrite)
+        // Simpan dengan mode APPEND (menambah ke baris bawah, tidak menimpa)
         if (file_put_contents($fileName, $content, FILE_APPEND)) {
             echo json_encode(['status' => 'success', 'file' => $fileName]);
         } else {
@@ -136,7 +136,7 @@ function createFtsDb($db_file) {
         }
     }
 }
-//=================== Api
+//=================== End Api
 
 
 //=================== Api-Debug
@@ -163,4 +163,4 @@ function highlight($text, $query) {
     }
     return $highlighted;
 }
-//=================== End Api-Debug
+//=================== Api-Debug Index
