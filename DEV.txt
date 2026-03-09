@@ -52,7 +52,7 @@ Basic :
 
 
 ##############################################################################
-Step 2
+Step 2 (DONE)
 Basic view with HTMX
 ====================
 Version 1 :
@@ -97,3 +97,49 @@ Version 1 :
     tulis Halo
     Kode:
     tulis Halo dengan program PHP
+
+
+##############################################################################
+Step 3
+Embed output with local dataset
+====================
+Version 2 :
+    - HTMX Index Version 2
+    - Enhance Frontend HTMX Index V2 add (Inject datasets, Server Status, Prompt Template, Toast, etc)
+    - Build a debug dashboard, to maintain vectors
+    - Integrating Embedded Models
+    - Build Chat system with embedded local dataset
+====================
+
+    Install SQLite Engine:
+    ----------------------
+    https://sqlite.org/download.html
+    Command:
+    sqlite3
+
+    Add Embeded Model:
+    ------------------
+    ollama pull embeddinggemma
+
+    HTMX Index V2 :
+    Debug V1
+    Inject Knowledge Base (Manual)
+    ---------------
+    touch public/debug.php
+
+    Extra refineContent:
+    --------------------
+    touch src/dictionary.json
+
+    Add some features to index 
+    --------------------------
+    HTMX Index Version 2
+
+    Add Index:
+    ----------
+    Saturnus adalah planet ke-7 dari tata surya kita, dan terkenal karena cincinnya yang spektakuler. Saturnus adalah planet yang sangat menarik dan unik karena cincinnya yang menakjubkan.
+
+    Prompt:
+    -------
+    saturnus
+

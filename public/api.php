@@ -1,11 +1,10 @@
 <?php 
-// api.php
-
 require_once 'bootstrap.php';
 
 $action = $_GET['action'] ?? '';
 $host = 'localhost'; // Customize if in Docker
 $defaultModel = 'default-chat'; // default-chat
+$db_file = BASEPATH . '/src/vector_store.db'; // Nama database
 
 // List of custom models allowed to appear in the dropdown
 $allowedModels = ['default-chat', 'asisten-riset', 'agen-koding'];
@@ -162,25 +161,26 @@ if ($action === 'save_log') {
     $model  = $_POST['model'] ?? 'unknown';
     $prompt = $_POST['prompt'] ?? '';
     $result = $_POST['result'] ?? '';
+    $duration = $_POST['duration'] ?? '';
 
     // Take the model name only (remove the :latest tag if any)
     $modelName = explode(':', $model)[0];
 
     // Create a 'logs' folder if it doesn't exist yet.
-    $path = BASEPATH . '/logs';
-    if (!file_exists($path)) {
-        mkdir($path, 0755, true);
+    if (!file_exists('logs')) {
+        mkdir('logs', 0755, true);
     }
-    if (!file_exists($path . '/'.str_replace(" ", "_", $modelName))) {
-        mkdir($path . '/'.$modelName, 0755, true);
+    if (!file_exists('logs/'.str_replace(" ", "_", $modelName))) {
+        mkdir('logs/'.$modelName, 0755, true);
     }
-    $logPath = $path . '/'.$modelName;
+    $logPath = 'logs/'.$modelName;
 
     $timestamp = date('Y-m-d H:i:s');
     $fileName  = $logPath.'/chat-history-' . date('Y-m-d') . '.log';
 
     $content = "==========================================START\n";
     $content .= "WAKTU  : $timestamp\n";
+    $content .= "DURASI : $duration\n";
     $content .= "MODEL  : $model\n";
     $content .= "PROMPT : $prompt\n";    
     $content .= "------------------------------------------\n";
@@ -189,10 +189,122 @@ if ($action === 'save_log') {
 
     // Save with APPEND mode (appends to bottom row, does not overwrite)
     if (file_put_contents($fileName, $content, FILE_APPEND)) {
-        $formatPath = 'logs/'.$modelName. '/'.basename($fileName);
-        echo json_encode(['status' => 'success', 'file' => $formatPath]);
+        echo json_encode(['status' => 'success', 'file' => $fileName]);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Gagal menulis file']);
     }
+    exit;
+}
+
+// --- Action: Inject FTS (Embeded Model) ---
+if ($action === 'inject_text') {
+    $content = $_POST['content'] ?? '';
+
+    if (strlen($content) < 10) {
+        echo "<span class='text-red-400'>Teks terlalu pendek!</span>";
+        exit;
+    }
+
+    $ollama = new OllamaExec();
+    $content = $ollama->cleanForIndex($content);
+
+    // automatic sentence correction before entering the FTS Index
+    $content = refineContent($content);
+
+    // Setup FTS
+    createFtsDb($db_file);
+    $db = new PDO('sqlite:'.$db_file);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db->exec("PRAGMA journal_mode = WAL;");
+
+    $chunks = preg_split('/\n\s*\n/', $content);
+    $count = 0;
+    foreach ($chunks as $chunk) {
+        $chunk = trim($chunk);
+        if (empty($chunk)) continue;
+
+        // Get embedding (for future/vector search)
+        $vector = $ollama->getEmbedding($chunk); 
+        
+        if ($vector) {
+            // 1. Save to master table
+            $stmt = $db->prepare("INSERT INTO kearifan_lokal (content, vector) VALUES (?, ?)");
+            $stmt->execute([$chunk, json_encode($vector)]);
+            
+            // 2. Save to quick lookup table (FTS5) - THIS IS IMPORTANT
+            $stmtFts = $db->prepare("INSERT INTO kearifan_lokal_fts (content) VALUES (?)");
+            $stmtFts->execute([$chunk]);
+            
+            $count++;
+        }
+    }
+
+    echo "
+        <div x-data=\"{ show: true }\" 
+             x-init=\"setTimeout(() => show = false, 8000)\" 
+             x-show=\"show\" 
+             x-transition:leave=\"transition ease-in duration-1000\"
+             x-transition:leave-start=\"opacity-100\"
+             x-transition:leave-end=\"opacity-0\"
+             class='text-emerald-400 font-bold italic p-2 bg-emerald-500/5 rounded border border-emerald-500/20'>
+            ✨ Memory Updated: $count chunks learned.
+        </div>";
+    exit;
+}
+
+if ($action === 'reindex_memory') {
+    try {
+        $db = new PDO('sqlite:'.$db_file);
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        $db->beginTransaction();
+
+        // 1. Clean & Rebuild FTS5 table with complete column schema (Content + Tags)
+        $db->exec("DROP TABLE IF EXISTS kearifan_lokal_fts");
+        $db->exec("CREATE VIRTUAL TABLE kearifan_lokal_fts USING fts5(
+            content, 
+            tags, 
+            content='kearifan_lokal', 
+            content_rowid='id'
+        )");
+
+        // 2. Directly move data from Master to FTS at the Database level
+        // This doesn't use up any PHP RAM at all!
+        $db->exec("INSERT INTO kearifan_lokal_fts(rowid, content, tags) 
+                   SELECT id, content, tags FROM kearifan_lokal");
+
+        $db->commit();
+
+        // Calculate total rows for feedback
+        $count = $db->query("SELECT count(*) FROM kearifan_lokal_fts")->fetchColumn();
+        
+        echo "<div x-data='{ show: true }' x-init='setTimeout(() => show = false, 5000)' x-show='show' class='text-amber-400 font-bold italic'>
+              🔄 Re-index Berhasil: $count data disinkronkan.
+              </div>";
+    } catch (Exception $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        echo "<span class='text-red-400'>Gagal Re-index: " . $e->getMessage() . "</span>";
+    }
+    exit;
+}
+
+if ($action === 'get_memory_stats') {
+    createFtsDb($db_file);
+    $db = new PDO('sqlite:'.$db_file);
+    
+    
+    // Count total chunks
+    $count = $db->query("SELECT COUNT(*) FROM kearifan_lokal")->fetchColumn();
+    
+    // Calculate database file size in KB/MB
+    $sizeBytes = filesize($db_file);
+    $sizeFormatted = $sizeBytes >= 1048576 
+        ? number_format($sizeBytes / 1048576, 2) . ' MB' 
+        : number_format($sizeBytes / 1024, 2) . ' KB';
+
+    echo "<div class='flex flex-col text-[10px] text-slate-500 font-mono'>
+            <span>TOTAL CHUNKS: <span class='text-blue-400'>$count</span></span>
+            <span>DB SIZE: <span class='text-amber-400'>$sizeFormatted</span></span>
+          </div>";
     exit;
 }

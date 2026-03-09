@@ -28,7 +28,7 @@
             isLoading: false, // Proses memuat jawaban
             toast: { show: false, message: '', type: 'success' }, // Toast
             showToTop: false,
-            showTemplates: false,
+            showTemplates: false,            
             init() {
                 // Deteksi scroll layar
                 window.addEventListener('scroll', () => {
@@ -164,7 +164,8 @@
                 const payload = new FormData();
                 payload.append('model', this.selectedModel);
                 payload.append('prompt', this.prompt);
-                payload.append('result', this.result);
+                payload.append('result', this.result);                
+                payload.append('duration', this.formattedTime); // Menambahkan durasi waktu ke dalam payload
 
                 fetch('api.php?action=save_log', {
                     method: 'POST',
@@ -179,6 +180,35 @@
                     }
                 })
                 .catch(err => console.error('Error:', err));
+            },
+            timer: 0, 
+            timerInterval: null,
+            isProcessing: false,
+            startTimer() {
+                this.timer = 0;
+                const startTime = Date.now();
+                this.timerInterval = setInterval(() => {
+                    //this.timer = ((Date.now() - startTime) / 1000).toFixed(1);
+                    this.timer = (Date.now() - startTime) / 1000;
+                }, 100);
+            },
+            stopTimer() {
+                clearInterval(this.timerInterval);
+            },
+            // Fungsi Konversi Otomatis
+            get formattedTime() {
+                let s = this.timer;
+                if (s < 60) {
+                    return s.toFixed(1) + 's';
+                } else if (s < 3600) {
+                    let m = Math.floor(s / 60);
+                    let rs = (s % 60).toFixed(0);
+                    return `${m}m ${rs}s`;
+                } else {
+                    let h = Math.floor(s / 3600);
+                    let m = Math.floor((s % 3600) / 60);
+                    return `${h}h ${m}m`;
+                }
             }
          }"
          x-init="$watch('selectedModel', value => {
@@ -199,9 +229,9 @@
                 <p class="text-slate-400 text-xs md:text-sm">i5 Gen 3 Node | Local AI Engine</p>
             </div>
 
-            <div class="flex items-center justify-between w-full md:w-auto md:gap-6 border-t md:border-t-0 border-slate-800 pt-4 md:pt-0">
+            <div x-data="{ isOffline: false }" class="flex items-center justify-between w-full md:w-auto md:gap-6 border-t md:border-t-0 border-slate-800 pt-4 md:pt-0">
                 
-                <div x-data="{ isOffline: false }" class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
 
                     <template x-if="isOffline">
                         <div class="flex flex-col items-start md:items-end border-r border-slate-700 pr-2 md:pr-4">
@@ -224,7 +254,7 @@
                             if (isOffline) {
                                 $event.preventDefault();
                                 return;
-                            }                            
+                            }
                             
                             // 2. BERSIHKAN KONTEN sebelum fetch dimulai
                             if(isLoading) {
@@ -254,7 +284,7 @@
                                  fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                             </svg>
-                            <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500 md:hidden group-hover:text-blue-400">Models</span>
+                            <span class="hidden md:inline text-[10px] font-bold uppercase tracking-widest text-slate-500 group-hover:text-blue-400">Models</span>
                         </div>
                     </button>
 
@@ -283,6 +313,44 @@
                         </div>
                     </div>
                 </div>
+
+                <div x-data="{ loadedModels: [] }" 
+
+                     x-init="setInterval(async () => { 
+                        // Jika tidak mengandung 'chat' atau 'asisten', jangan fetch apa-apa
+                        if (isOffline || !(selectedModel?.toLowerCase().includes('chat') || selectedModel?.toLowerCase().includes('asisten'))) {
+                            return;
+                        }
+
+                        try {
+                            const res = await fetch('http://localhost:11434/api/tags');
+                            const ps = await fetch('http://localhost:11434/api/ps');
+                            const data = await ps.json();
+                            loadedModels = data.models || [];
+                        } catch (e) {
+                            console.error('Ollama offline');
+                        }
+                    }, 5000)"
+                     class="flex gap-1.5 p-2 ms-2 bg-slate-900/80 rounded-full border border-slate-700 shadow-lg">
+                    
+                    <div :title="'Chat Model: ' + (loadedModels.some(m => m.name.includes('chat')) ? 'Active' : 'Standby')"
+                         class="w-3.5 h-3.5 rounded-full transition-all duration-500 text-[7px] font-bold text-center flex items-center justify-center"
+                         :class="loadedModels.some(m => m.name.includes('chat')) 
+                                 ? 'bg-emerald-500 text-emerald-950 shadow-[0_0_8px_#10b981] animate-pulse' 
+                                 : 'bg-slate-600 text-slate-300'">
+                         M
+                    </div>
+
+                    <div :title="'Embedding Model: ' + (loadedModels.some(m => m.name.includes('nomic')) ? 'Active' : 'Standby')"
+                         class="w-3.5 h-3.5 rounded-full transition-all duration-500 text-[7px] font-bold text-center flex items-center justify-center"
+                         :class="loadedModels.some(m => m.name.includes('nomic')) 
+                                ? 'bg-blue-500 text-blue-950 shadow-[0_0_8px_#3b82f6] animate-pulse' 
+                                : 'bg-slate-600 text-slate-300'">
+                        E
+                    </div>
+                </div>
+
+                
             </div>
         </header>
 
@@ -292,12 +360,90 @@
                 <div class="bg-slate-800 p-4 md:p-6 rounded-none md:rounded-xl border-y md:border border-slate-700 shadow-xl">
                     <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        AI Assistant
-                    </h2>
+                        AI Assistant buat Naoki
+                    </h2>                    
+
+                    <div class="mt-2 mb-2 bg-slate-900/40 border border-slate-700 rounded-xl overflow-hidden" 
+                         x-data="{ open: false }"
+                         x-show="selectedModel.toLowerCase().includes('chat') || selectedModel.toLowerCase().includes('asisten')"
+                         x-transition>
+                                            
+                        <button @click="open = !open" class="w-full flex items-center justify-between p-3 hover:bg-slate-800/50 transition-all">
+                            <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                                Inject Knowledge Base (Manual)
+                            </h3>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                        
+                        <div x-show="open" x-cloak class="p-4 border-t border-slate-700 bg-slate-900/20">
+
+                            <div class="flex items-center gap-4 bg-slate-900/50 p-2 px-4 rounded-full border border-slate-700/50">
+
+                                <div class="flex gap-1.5">
+                                    <div title="Chat Model" 
+                                         class="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse flex items-center justify-center text-[7px] font-bold text-emerald-950 leading-none">
+                                         M
+                                    </div>
+                                    
+                                    <div title="Embedding Model" 
+                                         class="w-3.5 h-3.5 rounded-full bg-blue-500 animate-pulse flex items-center justify-center text-[7px] font-bold text-blue-950 leading-none">
+                                         E
+                                    </div>
+                                </div>
+                                
+                                <div hx-get="api.php?action=get_memory_stats" 
+                                     hx-trigger="load, 
+                                             every 15s[(selectedModel || '').includes('chat') || (selectedModel || '').includes('asisten')], 
+                                             click from:#inject-btn" 
+                                     class="border-l border-slate-700 pl-4">
+                                    <div class="animate-pulse bg-slate-700 h-3 w-20 rounded"></div>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-center w-full my-2">
+                                <button @click="$dispatch('open-modal', { 
+                                            title: 'Konfirmasi Re-index', 
+                                            message: 'Semua memori akan disinkronkan ulang. Lanjutkan?', 
+                                            type: 'warning',
+                                            confirmText: 'Re-index Sekarang',
+                                            action: () => { htmx.trigger('#hidden-reindex-btn', 'click') }
+                                        })" 
+                                        class="group flex items-center gap-2 px-4 py-1.5 bg-transparent border border-amber-500/20 hover:border-amber-500/50 hover:bg-amber-500/5 rounded-full transition-all duration-300">
+                                    <span class="text-[9px] text-slate-500 group-hover:text-amber-400 uppercase tracking-widest">Reset & Re-index FTS</span>
+                                </button>
+
+                                <button id="hidden-reindex-btn" hx-post="api.php?action=reindex_memory" hx-target="#inject-status" class="hidden"></button>
+                            </div>
+
+                            <form hx-post="api.php?action=inject_text" hx-target="#inject-status" @htmx:after-request="document.getElementById('raw_text').value = ''">
+                                <textarea id="raw_text" name="content" rows="4" 
+                                          class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-xs text-slate-300 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 outline-none transition-all"
+                                          placeholder="Paste teks dari PDF atau dokumen Anda di sini..."></textarea>
+
+                                <button type="submit" 
+                                        hx-indicator="#submit-spinner"
+                                        class="group mt-3 w-full py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-[10px] font-bold rounded-lg border border-blue-500/30 transition-all uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 htmx-indicator-hide" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                    </svg>
+
+                                    <svg id="submit-spinner" class="animate-spin h-3 w-3 htmx-indicator text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+
+                                    <span class="btn-text">Tanamkan ke Memori AI</span>
+                                </button>
+                            </form>
+                            <div id="inject-status" class="mt-2 text-[10px] text-center"></div>                            
+                        </div>
+                    </div>
 
                     <div class="mt-2 mb-2 border-t border-slate-800">
                         <button @click="showTemplates = !showTemplates" 
-                                class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-blue-400 transition-colors group">
+                                class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-blue-400 transition-colors group">
                             <svg xmlns="http://www.w3.org/2000/svg" 
                                  class="h-3 w-3 transition-transform duration-300" 
                                  :class="showTemplates ? 'rotate-180' : ''" 
@@ -307,7 +453,8 @@
                             <span x-text="showTemplates ? 'Hide Quick Templates' : 'Show Quick Templates'"></span>
                         </button>
 
-                        <div x-show="showTemplates" 
+                        <div x-cloak
+                             x-show="showTemplates" 
                              x-collapse
                              x-transition:enter="transition ease-out duration-300"
                              x-transition:enter-start="opacity-0 transform -translate-y-2"
@@ -319,7 +466,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                 </svg>
                                 Greeting
-                            </button> 
+                            </button>
                             <button @click="setTemplate('explain')" 
                                     class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-slate-800/50 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/10 hover:border-blue-500/50 transition-all">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -419,7 +566,7 @@
                                 class="w-full bg-slate-900 border border-slate-700 rounded-lg p-4 pr-10 text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none text-blue-300 transition-all overflow-hidden resize-none"
                                 style="min-height: 3.5rem; height: auto;"
                                 rows="2"
-                                placeholder="Contoh: Siapa pembuat super komputer pertama..."></textarea>
+                                placeholder="Contoh: Apakah komputer quatum itu..."></textarea>
                             
                             <div class="absolute bottom-2 right-3 text-[10px] text-slate-600 font-mono" x-show="prompt.length > 0">
                                 <span x-text="prompt.length"></span> chars
@@ -480,7 +627,7 @@
                                 </div>
                                 
                                 <p class="mt-2 text-[10px] text-slate-500 italic text-center">
-                                    Mohon tunggu, Sistem sedang mengganti Model AI...
+                                    Mohon tunggu, Sistem sedang mengganti Agen AI Anda...
                                 </p>
                             </div>
                         </template>
@@ -493,10 +640,12 @@
                                 result = 'Sedang menganalisa...'; 
                                 thought = ''; // untuk menyimpan alur pikir 
                                 isExpanded = false; // mengontrol buka-tutup panel pemikiran 
-                                 // Kita ambil nilai langsung dari element select jika x-model belum sinkron
-                                 let currentModel = document.getElementsByName('model')[0].value;
+                                isProcessing = true;
+                                startTimer();
+                                // Kita ambil nilai langsung dari element select jika x-model belum sinkron
+                                let currentModel = document.getElementsByName('model')[0].value;
 
-                                 // Menggunakan FormData untuk POST
+                                // Menggunakan FormData untuk POST
                                 let formData = new FormData();
                                 formData.append('model', currentModel);
                                 formData.append('q', prompt);
@@ -528,17 +677,22 @@
                                     // Masukkan ke state Alpine.js
                                     thought = extractedThought;
                                     result = cleanResult;
-
-                                    //result = data;
+                                    
                                     progress = 100;
                                     playSound(); 
+
+                                    stopTimer();
+                                    isProcessing = false;
                                 })
                                 .catch(err => {
                                     result = 'Terjadi kesalahan koneksi...';
                                     showToast('Gagal memanggil AI', 'error');
+
+                                    stopTimer();
+                                    isProcessing = false;
                                 })
                                 .finally(() => { isLoading = false })"
-                        :disabled="isLoading || isSwitching || !prompt" 
+                        :disabled="isProcessing || isLoading || isSwitching || !prompt" 
                         :class="(isLoading || isSwitching) ? 'opacity-50 cursor-not-allowed bg-slate-600' : 'bg-blue-600 hover:bg-blue-500'"
                         class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition flex items-center gap-2 shadow-lg shadow-blue-900/20 w-full justify-center">
 
@@ -569,37 +723,22 @@
                         </svg>
                         <span x-text="isSwitching ? 'Menyiapkan Agen AI...' : (isLoading ? 'Sedang Menganalisa...' : 'Tanya AI')"></span>
                     </button>
-
-                    <!-- <button 
-                        @click="
-                            let fakeData = '<think>\n1. Menganalisis permintaan koding dari user.\n2. Merancang solusi menggunakan PHP Native.\n</think>\nIni adalah jawaban simulasi! Pemisahan teks berhasil.';
-                            
-                            // Perbaikan Regex agar tidak error SyntaxError
-                            let match = fakeData.match(/<think>([\s\S]*?)<\/think>/);
-                            
-                            if (match) {
-                                thought = match[1].trim();
-                                result = fakeData.replace(/<think>[\s\S]*?<\/think>/, '').trim();
-                            }
-                            
-                            isExpanded = true;
-                            showToast('Simulasi Berhasil!');
-                            playSound();
-                        "
-                        class="mt-2 text-[10px] text-slate-500 hover:text-blue-400 underline decoration-dotted uppercase tracking-widest transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                        </svg>
-                        Test UI Response
-                    </button> -->
                 </div>
 
                 <div class="bg-black/40 rounded-xl p-6 border border-slate-800 min-h-[100px] relative" 
+                     x-cloak 
                      x-show="result" 
                      x-transition>
                     
                     <div class="flex justify-between items-center mb-2">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Analysis Result:</h3>
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                            Analysis Result: 
+                            <span x-show="timer > 0 || isProcessing" 
+                                  x-text="formattedTime" 
+                                  :class="isProcessing ? 'text-blue-500 animate-pulse' : 'text-green-500'"
+                                  class="ml-2 font-mono normal-case">
+                            </span>
+                        </h3>
 
                         <div class="flex gap-2">
                             <button x-show="result.length > 0 && result !== 'Sedang menganalisa...' && !isLoading"
@@ -660,7 +799,7 @@
                          x-cloak>
                     </div>
 
-                    <div x-show="thought" class="mt-4 border border-amber-900/30 rounded-lg overflow-hidden transition-all duration-300" x-transition>
+                    <div x-cloak x-show="thought" class="mt-4 border border-amber-900/30 rounded-lg overflow-hidden transition-all duration-300" x-transition>
                         <div class="flex justify-between items-center bg-amber-950/20 px-4 py-2 border-b border-amber-900/20">
                             <div class="flex items-center gap-2">
                                 <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -721,7 +860,62 @@
         </div>
         <!-- End Toast -->
 
+        <!-- ModalBox -->
+        <div x-data="{ 
+                open: false, 
+                title: '', 
+                message: '', 
+                confirmAction: null,
+                confirmText: 'Ya, Lanjutkan',
+                type: 'info',
+                triggerAction() {
+                    if (this.confirmAction) {
+                        // Trigger HTMX secara manual jika dibutuhkan atau eksekusi fungsi
+                        this.confirmAction();
+                        this.open = false;
+                    }
+                }
+             }" 
+             x-cloak 
+             @open-modal.window="
+                open = true; 
+                title = $event.detail.title; 
+                message = $event.detail.message; 
+                confirmAction = $event.detail.action;
+                confirmText = $event.detail.confirmText || 'Ya';
+                type = $event.detail.type || 'info';
+             "
+             class="relative z-[999]">
+            
+            <div x-show="open" x-transition.opacity class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"></div>
+
+            <div x-show="open" 
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 class="fixed inset-0 flex items-center justify-center p-4">
+                
+                <div @click.away="open = false" class="bg-slate-900 border border-slate-700 w-full max-w-sm p-6 rounded-2xl shadow-2xl">
+                    <h2 class="text-lg font-bold mb-2" 
+                        :class="type === 'warning' ? 'text-amber-400' : 'text-blue-400'" 
+                        x-text="title"></h2>
+                    
+                    <p class="text-sm text-slate-400 mb-6" x-text="message"></p>
+
+                    <div class="flex justify-end gap-3">
+                        <button @click="open = false" class="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-300">Batal</button>
+                        <button @click="triggerAction()" 
+                                class="px-5 py-2 rounded-xl text-xs font-bold transition-all"
+                                :class="type === 'warning' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50' : 'bg-blue-500/20 text-blue-400 border border-blue-500/50'"
+                                x-text="confirmText"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- End ModalBox -->
+
         <button 
+            x-cloak 
             x-show="showToTop"
             x-transition:enter="transition ease-out duration-300"
             x-transition:enter-start="opacity-0 translate-y-10"
@@ -739,5 +933,14 @@
         </button>
     </div>
 
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./backend-php-sw.js')
+                .then(reg => console.log('SW Registered!', reg))
+                .catch(err => console.log('SW Failed!', err));
+        });
+    }
+    </script>
 </body>
 </html>
