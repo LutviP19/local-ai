@@ -218,7 +218,7 @@ Version 3 :
 
 
 ##############################################################################
-Step 5
+Step 5 (DONE)
 Build installed version with PWA
 ====================
 Build as PWA Version :
@@ -249,7 +249,7 @@ Build as PWA Version :
 
 
 ##############################################################################
-Step 6 (Optional - Final)
+Step 6 (Optional - Final) - [DONE]
 Integating with local system and network
 ====================
 Extra 
@@ -272,3 +272,56 @@ Install PWA to StartUp Application :
 
     3. Restart OS. 
 
+
+##############################################################################
+Step 7 (Bonus - Tools)
+Mics Tools for backend
+====================
+Tools 
+    - Update Modelfile and Warn Up
+    - Read Saved Logs
+====================
+
+    Create Tools:
+    -------------
+    touch update-ai.sh read_logs.php
+
+    Make executeable:
+    -----------------
+    chmod -x update-ai.sh
+
+    Command:
+    ollama rm generator-koding:latest && 
+    ./update-ai.sh generator-koding:latest ./agen-koding/Modelfile-generator
+
+    Output:
+    🚀 PROSES UPDATE & WARM-UP
+    ------------------------------------------------
+    🔹 Nama Model : generator-koding
+    🔹 Modelfile  : ./agen-koding/Modelfile-generator
+    📦 Mengupdate model di Ollama...
+    gathering model components 
+    using existing layer ...............
+    writing manifest 
+    success 
+    ✅ Create Model Berhasil.
+    🧹 Membersihkan RAM & Restarting Ollama...
+    [sudo] password for user: 
+    ⏳ Menunggu sistem stabil (5 detik)...
+    🔥 Melakukan Warm-up ke RAM...
+    ✨ Model 'generator-koding' sekarang sudah hangat di RAM!
+    ------------------------------------------------
+    ✅ SIAP DIGUNAKAN DI DASHBOARD
+
+
+    Command:
+    php read_logs.php
+
+    Output:
+    ✅ Berhasil! 2 data log telah dikonversi ke ./logs/history_converted.json
+
+    ================================
+    Waktu eksekusi: 0.00058 detik
+
+
+##############################################################################
