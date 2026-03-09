@@ -10,6 +10,7 @@ Stacks:
 - AI Models (gemma3:1b, qwen2.5:0.5b, embeddinggemma);
 - HTMX, AlpineJS, Tailwind-CSS
 - PWA Installer
+  
 Dev System: 
 - OS: Mac / Linux
 - Browser : Google Chrome
