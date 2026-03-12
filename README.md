@@ -1,7 +1,7 @@
 # local-ai
 
 ## Youtube Video
-[![Video](public/assets/splash-screen/Local-AI_screenshot.png)](https://youtu.be/2Gi_UE_VnZI)
+[![Video](public/assets/splash-screen/Local-AI_screenshot.png)](https://youtu.be/GaBX8KESn4o)
 
 # Build with PHP-8 & Ollama
 
